@@ -16,7 +16,7 @@ def input_contact():
     person = [name, phone]
     return person
 
-def add_contact(contacts person):
+def add_contact(contacts, person):
     contacts.append(person)
 
 def show_contacts(contacts):
