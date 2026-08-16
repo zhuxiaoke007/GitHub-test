@@ -33,8 +33,8 @@ class ContactBook:
         result = []                        # ✅ 1. 先初始化空列表
         for item in self.contacts:
             result.append(item.to_dict())  # ✅ 2. 调用每个联系人的 to_dict()
-        return result                  # ✅ 3. 返回结果
-    
+        return result                      # ✅ 3. 返回结果
+
     #将dict加载到联系人列表中
     def from_data(self, data):               
         self.contacts.clear()
