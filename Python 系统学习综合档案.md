@@ -1,7 +1,7 @@
 # Python 系统学习综合档案
 
-版本：v3.0  
-更新时间：2026-08-10
+版本：v4.0  
+更新时间：2026-09-02
 
 ---
 
@@ -19,10 +19,11 @@
 - ✅ 第二阶段：数据结构、文件、JSON、工程设计、通讯录 V3 —— 完成
 - ✅ 第三阶段：Module、import、模块设计、模块化通讯录 —— 完成
 - ✅ 第四阶段：Class、Object、Method、封装、OOP 基础设计 —— 完成
+- ✅ 第五阶段（前半）：深入封装、property、Protocol 接口、异常体系、三层架构、脏标记 —— 完成（lesson05）
 
 下一阶段：
 
-➡ **第五阶段：封装、Composition、对象协作、OOP 设计**
+➡ **第六阶段：继承、多态、Composition vs Inheritance、依赖注入与可测试性**
 
 最终目标：
 
@@ -214,29 +215,46 @@ Object
 ContactBook
 Contact
 OOP
+
+V5
+↓
+深入封装（私有属性 + property 只读）
+Protocol 接口与依赖倒置
+自定义异常层次
+UI 独立成层
+脏标记（改过才保存）
+入口守卫
 ```
 
 ---
 
 # 五、当前架构
 
-当前已经形成：
+当前已经形成三层结构（Contact Manager V5，lesson05）：
 
 ```text
-main.py
+main.py（入口 + 协调）
     │
-    ▼
-ContactBook
+    ├──► ui.run(contact_book)
+    │        │  只依赖 ContactBook 暴露的方法
+    │        ▼
+    │    ContactBook（业务核心）
+    │        │ owns
+    │        ▼
+    │    Contact × N
     │
-    ├── Contact
-    ├── Contact
-    └── Contact
-    │
-    ▼
-storage.py
-    │
-    ▼
-contacts.json
+    └──► JsonStorage("contacts.json")
+             ▲
+             │ 实现 Storage 协议
+        Storage (Protocol)
+             load() / save()
+```
+
+数据流：
+
+```text
+启动：contacts.json ──load──► list[dict] ──from_data──► ContactBook
+退出：ContactBook ──to_data──► list[dict] ──save──► contacts.json（仅当 is_dirty）
 ```
 
 职责：
@@ -244,22 +262,33 @@ contacts.json
 ```text
 main.py
     ↓
-程序生命周期
-用户交互
-流程协调
+初始化存储
+异常处理
+保存协调
+入口守卫
+
+ui.py
+    ↓
+菜单、输入、输出
+不 import contacts / storage
+只依赖 ContactBook 暴露的方法
 
 ContactBook
     ↓
 管理 Contact 集合
+维护快照（is_dirty / mark_saved）
 
 Contact
     ↓
 管理单个联系人
+验证自己的数据
 管理自己的数据转换
 
 storage.py
     ↓
-文件持久化
+Storage 协议（接口规范）
+JsonStorage 实现（文件持久化）
+自定义异常层次
 ```
 
 ---
@@ -1473,7 +1502,100 @@ storage
 
 ---
 
-# 第三十四部分：已掌握内容
+# 第三十四部分：第五阶段前半（lesson05）—— 分层架构与设计思想
+
+## 本阶段完成内容
+
+lesson05 在 lesson04 基础上完成架构重构：
+
+- 深入封装：`_contacts` / `_name` / `_phone` 私有属性
+- `@property` 只读属性（只有 getter，没有 setter）
+- `@staticmethod` 数据验证（构造时验证，数据进入系统前就不合法）
+- `__len__` / `__iter__`：让对象融入 Python 迭代协议
+- Storage Protocol（协议 = 接口规范，依赖倒置）
+- 自定义异常层次：`StorageError → StorageNotFoundError / StorageDataCorruptedError`
+- 异常链 `raise ... from e`（保留根因）
+- UI 独立成层：ui.py（不 import 业务与存储模块）
+- 脏标记：`is_dirty` 快照对比 + `mark_saved()`
+- 程序入口守卫：`if __name__ == "__main__":`
+
+---
+
+## 本阶段最重要的设计思想
+
+### 1. 为什么需要 Protocol（依赖倒置）
+
+main 直接使用 JsonStorage 也能工作，但依赖方向是：
+
+```text
+main ──► JsonStorage（具体实现）
+```
+
+一旦换成 SQLite / 内存存储，main 必须修改。
+
+正确方向：依赖抽象，不依赖实现：
+
+```text
+main ──► Storage（协议）
+            ▲
+            │ 实现
+        JsonStorage
+```
+
+main 只认识“会 load / save 的东西”，任何满足协议的对象都能被替换进来。
+
+### 2. 异常层次：把底层异常翻译成业务异常
+
+storage 不让 `json.JSONDecodeError`、`OSError` 直接穿透到 main：
+
+```text
+json.JSONDecodeError ──翻译──► StorageDataCorruptedError
+OSError              ──翻译──► StorageError
+文件不存在            ──────► StorageNotFoundError
+```
+
+main 只需要 `except StorageError` 就能兜住所有存储问题；
+`raise ... from e` 保留原始异常，调试时不丢根因。
+
+### 3. 脏标记：由数据自己回答“要不要保存”
+
+```text
+_saved_data    上次保存时的快照
+is_dirty       当前状态 != 快照
+mark_saved()   保存成功后更新快照
+```
+
+好处：
+
+- 改过才写盘
+- 改回原样则不写（语义正确）
+- ContactBook 不需要知道 Storage 的存在
+
+### 4. UI 成层：print 是界面的事
+
+L3 曾把 print 写进 ContactBook（UI 泄漏进业务层），L5 完成纠正：
+
+```text
+ui.py   菜单 / input / print
+        只依赖 len(book) / for book / book.add_contact(...)
+        不认识 storage，也不 import contacts
+```
+
+未来换 GUI，业务层与存储层一行不用改。
+
+### 5. 入口守卫
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+同一个文件既能当脚本直接运行，又能被安全导入；
+只有“直接运行”时才启动程序。
+
+---
+
+# 第三十五部分：已掌握内容
 
 ## 第一阶段：Python 基础
 
@@ -1559,22 +1681,39 @@ storage
 
 ---
 
-# 第三十五部分：当前仍需学习
+## 第五阶段（前半）：封装 / 接口 / 分层架构
 
-第五阶段：
+- [x] `_` 私有属性约定
+- [x] `@property` 只读属性
+- [x] `@staticmethod` 与构造时验证
+- [x] `__len__` / `__iter__` 迭代协议
+- [x] Protocol 抽象接口
+- [x] 依赖倒置（依赖协议而非实现）
+- [x] 自定义异常层次
+- [x] 异常链 `raise ... from e`
+- [x] 异常边界（存储层翻译异常）
+- [x] 脏标记 / 快照（is_dirty / mark_saved）
+- [x] 分层架构（UI / 业务 / 存储）
+- [x] 程序入口守卫
+- [x] Contact Manager V5
 
-- [ ] 深入理解封装
-- [ ] `property`
-- [ ] 对象之间的协作
-- [ ] Composition
-- [ ] Dependency
-- [ ] 对象之间的 Ownership
-- [ ] 接口设计
+---
+
+# 第三十六部分：当前仍需学习
+
+第五阶段（后半）：
+
+- [ ] 对象之间的协作（深化）
+- [ ] Composition（深化）
+- [ ] 对象之间的 Ownership（深化）
 - [ ] 继承
 - [ ] 多态
-- [ ] 抽象接口
 - [ ] Composition 与 Inheritance 的比较
+- [ ] 依赖注入与可测试性
 - [ ] 更复杂的 OOP 架构
+
+（封装、property、Dependency、接口设计、抽象接口已在前半完成，
+见第三十五部分勾选清单。）
 
 后续阶段：
 
@@ -1591,21 +1730,21 @@ storage
 
 ---
 
-# 第三十六部分：第五阶段交接
+# 第三十七部分：第六阶段交接
 
 ## 下一阶段主题
 
-**封装、Composition、对象协作与真正的 OOP 设计**
+**继承、多态、Composition vs Inheritance、依赖注入与可测试性**
 
 不要从大量新语法开始。
 
-应该从当前 Contact Manager 继续。
+应该从当前 Contact Manager V5 继续。
 
 ---
 
 ## 推荐教学顺序
 
-### 1. 封装
+### 1. 封装 ✅（lesson05 已完成）
 
 回答：
 
@@ -1613,7 +1752,7 @@ storage
 
 ---
 
-### 2. `property`
+### 2. `property` ✅（lesson05 已完成）
 
 回答：
 
@@ -1665,7 +1804,7 @@ Contact
 
 ---
 
-### 5. Dependency
+### 5. Dependency ✅（lesson05 已完成 Protocol 部分）
 
 研究：
 
@@ -1717,7 +1856,17 @@ Inheritance
 
 ---
 
-# 第三十七部分：第五阶段教学原则
+### 9. 依赖注入与可测试性
+
+回答：
+
+> Protocol 已经定义了接口，如何让“可替换的实现”真正进入构造过程？
+
+> 为什么“能注入”是“能测试”的前提？
+
+---
+
+# 第三十八部分：第六阶段教学原则
 
 必须继续保持：
 
@@ -1743,21 +1892,21 @@ Python 提供什么机制
 
 ---
 
-# 第三十八部分：下一次课程起点
+# 第三十九部分：下一次课程起点
 
 下一次不要重新讲：
 
-- 什么是 Class
-- 什么是 Instance
-- 什么是 self
-- 什么是 `__init__`
-- 什么是 `@classmethod`
+- 什么是 Class / Instance / self / `__init__` / `@classmethod`
+- 封装与 `_` 私有属性约定
+- `@property` 与受控访问
+- Protocol 与依赖倒置
+- 自定义异常层次与异常边界
 
 这些已经掌握。
 
 直接从：
 
-> **“我们已经有了 Contact 和 ContactBook。现在为什么还需要进一步的封装？”**
+> **“ContactBook 已经能通过 Storage 协议与任何实现协作。那么，什么时候才真正需要继承？与 Composition 相比，继承的代价是什么？”**
 
 开始。
 
@@ -1765,7 +1914,7 @@ Python 提供什么机制
 
 ---
 
-# 第三十九部分：整体课程进度
+# 第四十部分：整体课程进度
 
 当前：
 
@@ -1782,17 +1931,20 @@ Python 提供什么机制
 第四阶段  Class / Object / OOP
 ████████████████████ 100%
 
-第五阶段  封装 / Composition / 多态
+第五阶段  封装 / 接口 / 分层架构（前半）
+████████████░░░░░░░░ 60%
+
+第六阶段  继承 / 多态 / Composition vs Inheritance
 ░░░░░░░░░░░░░░░░░░░░ 0%
 ```
 
 当前整体课程处于：
 
-> **基础 Python 已完成，正在从“Python 语言学习”进入“软件设计与 OOP 深化阶段”。**
+> **分层架构已成型，正在从“会设计对象”进入“继承、多态与对象协作深化阶段”。**
 
 ---
 
-# 第四十部分：教学总原则
+# 第四十一部分：教学总原则
 
 始终保持：
 
