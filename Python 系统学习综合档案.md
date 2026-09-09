@@ -1,7 +1,7 @@
 # Python 系统学习综合档案
 
-版本：v5.0   
-更新时间：2026-09-05
+版本：v6.0    
+更新时间：2026-09-09
 
 ---
 
@@ -20,10 +20,11 @@
 - ✅ 第三阶段：Module、import、模块设计、模块化通讯录 —— 完成
 - ✅ 第四阶段：Class、Object、Method、封装、OOP 基础设计 —— 完成
 - ✅ 第五阶段（前半）：深入封装、property、Protocol 接口、异常体系、三层架构、脏标记 —— 完成（lesson05）
+- ✅ 第六阶段：依赖注入、应用层拆分、可测试性、日志降级设计、src-layout 打包 —— 完成（lesson06/07）
 
 下一阶段：
 
-➡ **第六阶段：继承、多态、Composition vs Inheritance、依赖注入与可测试性**
+➡ **第七阶段：继承、多态、Composition vs Inheritance**
 
 最终目标：
 
@@ -1699,9 +1700,24 @@ if __name__ == "__main__":
 
 ---
 
+## 第六阶段：依赖注入 / 可测试性 / 工程化
+
+- [x] 应用层拆分（ContactService / ApplicationLifecycle）
+- [x] 组合根与构造器注入
+- [x] 领域异常体系与异常三层翻译
+- [x] 脏标记显式旗标（mark_dirty）
+- [x] Logger 三层降级设计
+- [x] unittest.mock（patch / Mock / side_effect / call_args_list / capsys）
+- [x] pytest 分层测试（unit / integration / tmp_path）
+- [x] src-layout 打包（pyproject.toml / pip install -e .）
+- [x] 包成员导入（from contact_manager.domain import ...）
+- [x] Contact Manager lesson07
+
+---
+
 # 第三十六部分：当前仍需学习
 
-第五阶段（后半）：
+第六阶段（后半）：
 
 - [ ] 对象之间的协作（深化）
 - [ ] Composition（深化）
@@ -1709,11 +1725,10 @@ if __name__ == "__main__":
 - [ ] 继承
 - [ ] 多态
 - [ ] Composition 与 Inheritance 的比较
-- [ ] 依赖注入与可测试性
 - [ ] 更复杂的 OOP 架构
 
-（封装、property、Dependency、接口设计、抽象接口已在前半完成，
-见第三十五部分勾选清单。）
+（封装、property、Dependency、接口设计、抽象接口、依赖注入、可测试性
+已完成，见第三十五部分勾选清单。）
 
 后续阶段：
 
@@ -1730,15 +1745,15 @@ if __name__ == "__main__":
 
 ---
 
-# 第三十七部分：第六阶段交接
+# 第三十七部分：第七阶段交接
 
 ## 下一阶段主题
 
-**继承、多态、Composition vs Inheritance、依赖注入与可测试性**
+**继承、多态、Composition vs Inheritance**
 
 不要从大量新语法开始。
 
-应该从当前 Contact Manager V5 继续。
+应该从当前 Contact Manager（lesson07，src-layout 工程化）继续。
 
 ---
 
@@ -1856,7 +1871,7 @@ Inheritance
 
 ---
 
-### 9. 依赖注入与可测试性
+### 9. 依赖注入与可测试性 ✅（lesson06/07 已完成）
 
 回答：
 
@@ -1866,7 +1881,7 @@ Inheritance
 
 ---
 
-# 第三十八部分：第六阶段教学原则
+# 第三十八部分：第七阶段教学原则
 
 必须继续保持：
 
@@ -1901,6 +1916,9 @@ Python 提供什么机制
 - `@property` 与受控访问
 - Protocol 与依赖倒置
 - 自定义异常层次与异常边界
+- 应用层与依赖注入（Service / Lifecycle / 组合根）
+- 单元测试与 Mock（pytest / unittest.mock）
+- src-layout 打包与包成员导入
 
 这些已经掌握。
 
@@ -1934,13 +1952,16 @@ Python 提供什么机制
 第五阶段  封装 / 接口 / 分层架构（前半）
 ████████████░░░░░░░░ 60%
 
-第六阶段  继承 / 多态 / Composition vs Inheritance
-░░░░░░░░░░░░░░░░░░░░ 0%
+第六阶段  依赖注入 / 可测试性 / 工程化
+███████████████████  100%
+
+第七阶段  继承 / 多态 / Composition vs Inheritance
+░░░░░░░░░░░░░░░░░░░░  0%
 ```
 
 当前整体课程处于：
 
-> **分层架构已成型，正在从“会设计对象”进入“继承、多态与对象协作深化阶段”。**
+> **应用层与测试体系已成型，正在从“会组装组件”进入“继承、多态与对象协作深化阶段”。**
 
 ---
 
@@ -2054,7 +2075,78 @@ L5  项目有架构  Protocol + 异常层次 + UI 成层 + 脏标记 + 入口守
 
 ---
 
-# 第四十二部分：教学总原则
+# 第四十二部分：lesson06/07 —— 依赖注入与可测试性（2026-09-09）
+
+## lesson06：应用层拆分与依赖注入
+
+lesson06 在 lesson05 三层架构之上完成范式跃迁：
+
+- 应用层出现：ContactService（业务用例）与 ApplicationLifecycle（生命周期控制）
+- main.py 退化为组合根（Composition Root）：只负责创建组件、注入依赖、驱动主循环
+- 领域异常体系：ContactValidationError / DuplicateContactError / ContactNotFoundError
+- 异常三层翻译：Domain 说业务语言，Service 把 IndexError 翻译成 ContactNotFoundError，
+  main 只捕获语义异常
+- 脏标记范式切换：快照比对（O(n)）→ mark_dirty() 显式旗标（O(1)）
+- 修复两项历史缺陷：联系人列表编号显示（L1 遗传 5 课）、change_phone 查重
+
+## lesson07：测试、日志与工程化
+
+### Logger 三层降级设计
+
+```text
+主日志 logs/app.log（失败重试 3 次）
+    ↓ 全部失败
+备用日志 logs/fallback.log（尝试 1 次）
+    ↓ 失败
+控制台输出（兜底）
+```
+
+- 构造期降级安全：目录创建失败、文件打开失败都不抛出，逐级降级
+- ApplicationLifecycle 注入 Logger，shutdown() 在 finally 中最后关闭日志
+
+### 测试体系（9 个测试，pytest + unittest.mock）
+
+```text
+tests/
+├── unit/          6 个：Logger 降级策略白盒测试
+│                  （patch.object / side_effect / call_args_list / capsys）
+└── integration/   3 个：Lifecycle 启动、保存回环（tmp_path 隔离真实文件系统）
+```
+
+### src-layout 工程化
+
+```text
+lesson07/
+├── pyproject.toml          setuptools + packages.find(where=["src"])
+├── src/contact_manager/    应用包（__init__.py）
+└── tests/unit|integration/
+```
+
+- `pip install -e .` 可编辑安装后，任何目录都能 import contact_manager
+- 导入视角演进：`from domain import ...`（顶层模块视角，sys.path 指向包内部）
+  → `from contact_manager.domain import ...`（包成员视角）
+- 教学要点：导入只看 sys.path，不看目录嵌套；
+  “运行正常”只说明入口目录恰好进了 sys.path，布局与导入视角必须一致
+
+## 实测结论（2026-09-09）
+
+- pytest 9/9 从仓库根直接全绿（无需 PYTHONPATH）
+- 上一轮发现的两个问题均已修复：
+  1. 测试收集失败（导入未包化）→ 全部改为包成员导入
+  2. start() 在 from_data 之前记“数据加载成功”→ 日志移到恢复成功之后
+
+## 当前遗留
+
+- lint 38 项（19 项可 ruff --fix 自动修复；logger.py 的 BLE001/S110/SIM115
+  共 15 项属降级设计被新默认规则标记，经讨论决定保留不豁免）
+- logs/、*.egg-info 未加入 .gitignore
+- lesson06 的“结构损坏 JSON 启动崩溃”问题延续（from_data 的
+  KeyError/TypeError/ValueError 未在生命周期层转译）
+- CI 双红灯为既有旧问题：lesson05 lint 5 处 + lesson01 顶层循环 EOFError
+
+---
+
+# 第四十三部分：教学总原则
 
 始终保持：
 
