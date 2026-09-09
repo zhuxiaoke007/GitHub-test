@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 contacts.json
+logs/
+*.egg-info/
+.pytest_cache/
